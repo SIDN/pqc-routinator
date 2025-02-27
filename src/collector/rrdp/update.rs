@@ -248,10 +248,11 @@ impl ProcessSnapshot for SnapshotUpdate<'_> {
         &mut self,
         uri: uri::Rsync,
         data: &mut rrdp::ObjectReader,
-    ) -> Result<(), Self::Err> {
+    ) -> Result<usize, Self::Err> {
         let content = RrdpDataRead::new(
             data, &uri, self.collector.config().max_object_size,
         ).read_all()?;
+        let size = content.len();
         self.archive.publish_object(&uri, &content).map_err(|err| match err {
             PublishError::AlreadyExists => {
                 SnapshotError::DuplicateObject(uri.clone())
@@ -271,7 +272,7 @@ impl ProcessSnapshot for SnapshotUpdate<'_> {
                 );
                 SnapshotError::RunFailed(RunFailed::fatal())
             }
-        })
+        }).map(|_| {size})
     }
 }
 
@@ -379,13 +380,14 @@ impl ProcessDelta for DeltaUpdate<'_> {
         uri: uri::Rsync,
         hash: Option<rrdp::Hash>,
         data: &mut rrdp::ObjectReader<'_>
-    ) -> Result<(), Self::Err> {
+    ) -> Result<usize, Self::Err> {
         if !self.seen.insert(uri.clone()) {
             return Err(DeltaError::ObjectRepeated { uri })
         }
         let content = RrdpDataRead::new(
             data, &uri, self.collector.config().max_object_size
         ).read_all()?;
+        let size = content.len();
         match hash {
             Some(hash) => {
                 self.archive.update_object(
@@ -398,7 +400,7 @@ impl ProcessDelta for DeltaUpdate<'_> {
                         DeltaError::ObjectHashMismatch { uri: uri.clone() }
                     }
                     AccessError::Archive(err) => DeltaError::Archive(err),
-                })
+                }).map(|_| {size})
             }
             None => {
                 self.archive.publish_object(&uri, &content).map_err(|err| {
@@ -412,7 +414,7 @@ impl ProcessDelta for DeltaUpdate<'_> {
                             DeltaError::Archive(err)
                         }
                     }
-                })
+                }).map(|_| {size})
             }
         }
     }

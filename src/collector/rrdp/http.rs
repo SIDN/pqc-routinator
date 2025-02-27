@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
-use log::{error, warn};
+use log::{error, info, warn};
 use reqwest::{header, redirect};
 use reqwest::{Certificate, Proxy, StatusCode};
 use reqwest::blocking::{Client, ClientBuilder, RequestBuilder, Response};
@@ -197,9 +197,14 @@ impl HttpClient {
         if let Some(timeout) = self.timeout {
             request = request.timeout(timeout);
         }
+        let t_before = Utc::now();
         request.send().and_then(|response| {
             response.error_for_status()
         }).map(|response| {
+            let t_after = Utc::now();
+            let duration = t_after - t_before;
+            info!("timing: {}, {}", uri, duration.num_microseconds().unwrap());
+
             HttpResponse::create(response, uri, &self.response_dir, multi)
         })
     }
